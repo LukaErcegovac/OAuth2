@@ -7,7 +7,10 @@ from dotenv import load_dotenv
 from pymongo.errors import ConnectionFailure
 import os
 import bcrypt
-
+import asyncio
+import requests
+import socket
+import httpx
 app = FastAPI()
 
 load_dotenv()
@@ -31,6 +34,26 @@ async def connect_to_mongodb():
         client.server_info()  # Test if the connection is successful
     except ConnectionFailure:
         raise HTTPException(status_code=500, detail="Could not connect to MongoDB")
+
+async def send_heartbeat():
+    server_port = get_local_port()
+
+    while True:
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post('http://localhost:8000/heartbeat', json={"server_port": server_port})
+                print(response.text)
+            except httpx.HTTPError as exc:
+                print(f"HTTP error occurred: {exc}")
+            except Exception as exc:
+                print(f"Error occurred: {exc}")
+        await asyncio.sleep(3) 
+
+def get_local_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(('localhost', 0))
+        _, port = s.getsockname()
+    return port
 
 class User(BaseModel):
     email: str
@@ -86,8 +109,10 @@ async def login(email: str, password: str):
 
 @app.on_event("startup")
 async def startup_event():
-    connect_to_mongodb()
+    await connect_to_mongodb()
     print("Connected to MongoDB")
+    asyncio.create_task(send_heartbeat())
+    
 
 @app.on_event("shutdown")
 async def shutdown_event():
