@@ -1,12 +1,24 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import time
+import random
+import httpx
 
 app = FastAPI()
 
 SIDE_SERVERS = {}
 server_counter = 0
-HEARTBEAT_TIMEOUT = 60  # Timeout in seconds
+HEARTBEAT_TIMEOUT = 60 
+
+class User(BaseModel):
+    email: str
+    full_name: str
+    address: str
+    password: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
 
 class HeartbeatData(BaseModel):
     server_port: int
@@ -39,11 +51,49 @@ async def heartbeat(data: HeartbeatData):
             "message": f"Heartbeat received from new Server {server_name} and added to the list",
             "current_servers": SIDE_SERVERS
         }
+    
+async def register(user: User):
+    try:
+        server_name, server_info = random.choice(list(SIDE_SERVERS.items()))
+        server_port = server_info["server_port"]
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"http://localhost:{server_port}/register", json=user.dict())
+            response.raise_for_status()
+            return response.json()
+
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to register user: {str(exc)}")
+    
+async def login(userlogin: UserLogin):
+    try:
+        server_name, server_info = random.choice(list(SIDE_SERVERS.items()))
+        server_port = server_info["server_port"]
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"http://localhost:{server_port}/login", json=userlogin.dict())
+            response.raise_for_status()
+            return response.json()
+
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to login user: {str(exc)}")
 
 
 @app.get('/servers')
 async def get_servers():
     return SIDE_SERVERS
+
+@app.post('/register')
+async def register_user(user: User):
+    return await register(user)
+
+@app.post('/login')
+async def login_user(userlogin: UserLogin):
+    return await login(userlogin)
 
 
 def cleanup_servers():
