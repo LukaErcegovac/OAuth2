@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException
 from pymongo import MongoClient
 from datetime import datetime, timedelta
 from jose import jwt
@@ -8,9 +8,9 @@ from pymongo.errors import ConnectionFailure
 import os
 import bcrypt
 import asyncio
-import requests
-import socket
 import httpx
+import sys
+
 app = FastAPI()
 
 load_dotenv()
@@ -18,7 +18,7 @@ load_dotenv()
 MONGO_DB = os.getenv("MONGO_DB")
 MONGO_CONNECTION_STRING = os.getenv("MONGO_CONNECTION_STRING")
 client = MongoClient(MONGO_CONNECTION_STRING)
-db = client[MONGO_DB]  # Assuming MONGO_DB contains the database name
+db = client[MONGO_DB]
 users_collection = db["Users"]
 
 SECRET_KEY = os.getenv("SECRET_KEY")
@@ -31,7 +31,7 @@ async def connect_to_mongodb():
     global client
     try:
         client = MongoClient(MONGO_CONNECTION_STRING)
-        client.server_info()  # Test if the connection is successful
+        client.server_info()
     except ConnectionFailure:
         raise HTTPException(status_code=500, detail="Could not connect to MongoDB")
 
@@ -47,18 +47,22 @@ async def send_heartbeat():
                 print(f"HTTP error occurred: {exc}")
             except Exception as exc:
                 print(f"Error occurred: {exc}")
-        await asyncio.sleep(3) 
+        await asyncio.sleep(30) 
 
-def get_local_port():
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(('localhost', 0))
-        _, port = s.getsockname()
+def get_local_port():    
+    if "--port" in sys.argv:
+                index = sys.argv.index("--port")
+                port = int(sys.argv[index + 1])
     return port
 
 class User(BaseModel):
     email: str
     full_name: str
     address: str
+    password: str
+
+class UserLogin(BaseModel):
+    email: str
     password: str
 
 def verify_password(plain_password, hashed_password):
@@ -72,6 +76,7 @@ def create_access_token(data: dict, expires_delta: timedelta):
     expire = datetime.utcnow() + expires_delta
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
     return encoded_jwt
 
 async def register(user: User):
@@ -91,9 +96,13 @@ async def register(user: User):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to register user: {str(e)}")
     
-async def login(email: str, password: str):
+async def login(userlogin: UserLogin):
     try:
+        email = userlogin.email
+        password = userlogin.password
+
         user = users_collection.find_one({"email": email})
+
         if not user or not verify_password(password, user["password"]):
             raise HTTPException(status_code=401, detail="Invalid email or password")
 
@@ -101,6 +110,8 @@ async def login(email: str, password: str):
         access_token = create_access_token(
             data={"email": email, "role": user["role"]}, expires_delta=access_token_expires
         )
+
+        print(access_token)
 
         return {"access_token": access_token, "token_type": "bearer"}
     except Exception as e:
@@ -125,5 +136,5 @@ async def register_user(user: User):
    return await register(user)
 
 @app.post("/login")
-async def login_user(email: str, password: str):
-   return await login(email, password)
+async def login_user(userlogin: UserLogin):
+   return await login(userlogin)
