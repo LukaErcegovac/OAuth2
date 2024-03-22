@@ -1,4 +1,3 @@
-from bson import ObjectId
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from pymongo.errors import ConnectionFailure
@@ -24,7 +23,7 @@ db = client[MONGO_DB]
 data_collection = db["Data"]
 
 SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = "HS256"
+ALGORITHM = os.getenv("ALGORITHM")
 
 class Item(BaseModel):
     name: str
@@ -83,6 +82,14 @@ def save_item(item: Item):
     result = data_collection.insert_one(item_dict)
     return {"id": str(result.inserted_id)}
 
+
+
+@app.on_event("startup")
+async def startup_event():
+    await connect_to_mongodb()
+    print("Connected to MongoDB")
+    asyncio.create_task(send_heartbeat())
+
 @app.post("/items", response_model=dict)
 async def create_item(item: Item, token_data: dict = Depends(verify_token)):
     return save_item(item)
@@ -102,8 +109,3 @@ async def admin_only_route(user_role: str = Depends(get_user_role)):
         raise HTTPException(status_code=403, detail="You need to be an admin to access this resource")
     return {"message": "Welcome, admin!"}
 
-@app.on_event("startup")
-async def startup_event():
-    await connect_to_mongodb()
-    print("Connected to MongoDB")
-    asyncio.create_task(send_heartbeat())

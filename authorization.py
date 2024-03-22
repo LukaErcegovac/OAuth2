@@ -22,10 +22,20 @@ db = client[MONGO_DB]
 users_collection = db["Users"]
 
 SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = "HS256"
+ALGORITHM = os.getenv("ALGORITHM")
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 client = None
+
+class User(BaseModel):
+    email: str
+    full_name: str
+    address: str
+    password: str
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
 
 async def connect_to_mongodb():
     global client
@@ -54,16 +64,6 @@ def get_local_port():
                 index = sys.argv.index("--port")
                 port = int(sys.argv[index + 1])
     return port
-
-class User(BaseModel):
-    email: str
-    full_name: str
-    address: str
-    password: str
-
-class UserLogin(BaseModel):
-    email: str
-    password: str
 
 def verify_password(plain_password, hashed_password):
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password)
@@ -116,6 +116,7 @@ async def login(userlogin: UserLogin):
         return {"access_token": access_token, "token_type": "bearer"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
+
 
 
 @app.on_event("startup")

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import time
@@ -78,6 +78,16 @@ async def heartbeat(data: HeartbeatData):
         "message": f"Heartbeat received from Server {server_name}.",
         "current_servers": SIDE_SERVERS if not data.auth else AUTH_SIDE_SERVERS
     }
+
+def cleanup_servers():
+    current_time = int(time.time())
+    global server_counter
+
+    for server_name, server_info in list(SIDE_SERVERS.items()):
+        if current_time - server_info["timestamp"] > HEARTBEAT_TIMEOUT:
+            print(f"Server {server_name} timed out and removed from the list.")
+            del SIDE_SERVERS[server_name]
+            server_counter -= 1
     
 async def register(user: User):
     try:
@@ -190,14 +200,3 @@ async def get_all_items_from_auth(token: HTTPAuthorizationCredentials = Depends(
 @app.get("/admin_only")
 async def admin_only_route(token: HTTPAuthorizationCredentials = Depends(bearer_scheme)):
     return await admin_only(token)
-
-
-def cleanup_servers():
-    current_time = int(time.time())
-    global server_counter
-
-    for server_name, server_info in list(SIDE_SERVERS.items()):
-        if current_time - server_info["timestamp"] > HEARTBEAT_TIMEOUT:
-            print(f"Server {server_name} timed out and removed from the list.")
-            del SIDE_SERVERS[server_name]
-            server_counter -= 1
