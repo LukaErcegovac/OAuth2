@@ -172,6 +172,10 @@ async def admin_only(token: HTTPAuthorizationCredentials = Depends(bearer_scheme
     except httpx.RequestError as exc:
         raise HTTPException(status_code=500, detail=f"Failed to fetch data from worker server: {str(exc)}")
 
+@app.get("/")
+async def hello():
+    return "I'm alive"
+
 @app.get('/servers')
 async def get_servers():
     return SIDE_SERVERS
