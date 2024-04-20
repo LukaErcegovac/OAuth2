@@ -11,7 +11,7 @@ bearer_scheme = HTTPBearer()
 SIDE_SERVERS = {}
 AUTH_SIDE_SERVERS = {}
 server_counter = 0
-HEARTBEAT_TIMEOUT = 60 
+HEARTBEAT_TIMEOUT = 6
 
 class User(BaseModel):
     email: str
@@ -83,11 +83,27 @@ def cleanup_servers():
     current_time = int(time.time())
     global server_counter
 
+    # Cleanup SIDE_SERVERS
+    servers_to_remove = []
     for server_name, server_info in list(SIDE_SERVERS.items()):
         if current_time - server_info["timestamp"] > HEARTBEAT_TIMEOUT:
-            print(f"Server {server_name} timed out and removed from the list.")
-            del SIDE_SERVERS[server_name]
-            server_counter -= 1
+            print(f"Server {server_name} timed out and removed from SIDE_SERVERS.")
+            servers_to_remove.append(server_name)
+
+    for server_name in servers_to_remove:
+        del SIDE_SERVERS[server_name]
+        server_counter -= 1
+
+    # Cleanup AUTH_SIDE_SERVERS
+    auth_servers_to_remove = []
+    for server_name, server_info in list(AUTH_SIDE_SERVERS.items()):
+        if current_time - server_info["timestamp"] > HEARTBEAT_TIMEOUT:
+            print(f"Server {server_name} timed out and removed from AUTH_SIDE_SERVERS.")
+            auth_servers_to_remove.append(server_name)
+
+    for server_name in auth_servers_to_remove:
+        del AUTH_SIDE_SERVERS[server_name]
+        server_counter -= 1
     
 async def register(user: User):
     try:

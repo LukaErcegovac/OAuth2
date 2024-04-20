@@ -50,7 +50,7 @@ async def send_heartbeat():
                 print(f"HTTP error occurred: {exc}")
             except Exception as exc:
                 print(f"Error occurred: {exc}")
-        await asyncio.sleep(30) 
+        await asyncio.sleep(3) 
 
 def get_local_port():    
     if "--port" in sys.argv:
